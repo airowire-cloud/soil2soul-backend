@@ -163,7 +163,7 @@ REST_FRAMEWORK = {
 # CORS settings
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://localhost:8000',
+    default='http://localhost:3000,http://localhost:8000,https://soilandsoulfoods.com,https://www.soilandsoulfoods.com',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 
