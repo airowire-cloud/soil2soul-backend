@@ -1,1 +1,2 @@
-web: python manage.py migrate && gunicorn --workers 4 --worker-class sync --bind 0.0.0.0:$PORT --timeout 60 core.wsgi:application
+release: python manage.py migrate --noinput
+web: python manage.py migrate && gunicorn --workers 3 --worker-class sync --bind 0.0.0.0:$PORT --timeout 120 --max-requests 1000 --max-requests-jitter 100 core.wsgi:application
