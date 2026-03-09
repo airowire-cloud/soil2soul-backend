@@ -2,6 +2,8 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile, Address, UserActivity
 from .serializers import (
     UserSerializer, UserProfileSerializer, AddressSerializer, 
@@ -12,8 +14,34 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    
+
+    def get_permissions(self):
+        if self.action in ['login', 'register']:
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
     @action(detail=False, methods=['post'])
+    def login(self, request):
+        """Login and return JWT tokens"""
+        email = request.data.get('email')
+        password = request.data.get('password')
+        user = authenticate(username=email, password=password)
+        if not user:
+            # Try finding user by email
+            try:
+                user_obj = User.objects.get(email=email)
+                user = authenticate(username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+        if user:
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+            })
+        return Response({'detail': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def register(self, request):
         """Create a new user account"""
         serializer = UserRegistrationSerializer(data=request.data)
