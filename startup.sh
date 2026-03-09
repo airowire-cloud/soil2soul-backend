@@ -33,8 +33,8 @@ if [ ! -d "venv" ]; then
     $PYTHON -m venv venv
 fi
 source venv/bin/activate
-PYTHON=python
-PIP="python -m pip"
+PYTHON=python3
+PIP="python3 -m pip"
 
 # Install dependencies
 $PIP install --upgrade pip
