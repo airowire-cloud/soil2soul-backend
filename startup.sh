@@ -16,10 +16,10 @@ echo "Running from: $APP_DIR"
 # Detect python
 if command -v python3 &>/dev/null; then
     PYTHON=python3
-    PIP=pip3
+    PIP="python3 -m pip"
 elif command -v python &>/dev/null; then
     PYTHON=python
-    PIP=pip
+    PIP="python -m pip"
 else
     echo "ERROR: Python not found!"
     exit 1
