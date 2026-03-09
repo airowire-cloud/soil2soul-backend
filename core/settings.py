@@ -15,19 +15,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-soil-soul-secret-key-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
-
-# Allow all Railway and common production domains
-ALLOWED_HOSTS += ['.railway.app', '.up.railway.app']
-
-# In production or if explicitly set, allow all hosts
-if not DEBUG or os.environ.get('ENVIRONMENT') == 'production':
-    ALLOWED_HOSTS += ['*']
-
-# Allow Railway's internal host if set
-RAILWAY_HOST = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
-if RAILWAY_HOST:
-    ALLOWED_HOSTS.append(RAILWAY_HOST)
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [
