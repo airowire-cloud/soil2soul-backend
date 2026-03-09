@@ -17,6 +17,14 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Allow all Railway and common production domains
+ALLOWED_HOSTS += ['.railway.app', '.up.railway.app']
+
+# Allow Railway's internal host if set
+RAILWAY_HOST = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')
+if RAILWAY_HOST:
+    ALLOWED_HOSTS.append(RAILWAY_HOST)
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -131,7 +139,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+# Only include static dir if it exists (avoids Railway/Docker W004 warning)
+_static_dir = BASE_DIR / 'static'
+STATICFILES_DIRS = [_static_dir] if _static_dir.exists() else []
 
 # Media files
 MEDIA_URL = '/media/'
