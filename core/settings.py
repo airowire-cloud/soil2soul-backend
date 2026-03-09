@@ -84,21 +84,19 @@ DB_SSLMODE = config('DB_SSLMODE', default='require')
 # Build database OPTIONS based on environment
 db_options = {
     'sslmode': DB_SSLMODE,
-    # TCP keepalives for connection stability
-    'keepalives': 1,
-    'keepalives_idle': 30,
-    'keepalives_interval': 10,
-    'keepalives_count': 5,
-    'connect_timeout': 30,
+    'connect_timeout': 10,
 }
 
-# For Railway and cloud environments, ensure proper SSL
+# For Railway and cloud environments, add connection resilience
 if 'railway' in config('RAILWAY_ENVIRONMENT_NAME', default='').lower() or config('ENVIRONMENT', default='') == 'production':
     db_options.update({
         'sslmode': 'require',
-        'sslcert': None,
-        'sslrootcert': None,
         'application_name': 'soil2soul_backend',
+        # Add TCP keepalives for connection stability
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5,
     })
 
 DATABASES = {
