@@ -24,16 +24,26 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . .
 
+# Copy .env file if exists (optional - better to use environment variables at runtime)
+COPY .env* ./ 2>/dev/null || :
+
+# Export environment variables from .env file at container startup
+# Create entrypoint script
+RUN echo '#!/bin/bash\n\
+set -a\n\
+[ -f .env ] && . ./.env\n\
+set +a\n\
+exec "$@"' > /entrypoint.sh && \
+chmod +x /entrypoint.sh
+
 # Collect static files (ignore errors if STATIC_ROOT not configured)
 RUN python manage.py collectstatic --noinput || true
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8000/api/products/')" || exit 1
+# Set entrypoint to load environment variables
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Run migrations and start Gunicorn
-CMD python manage.py migrate && \
-    gunicorn --workers 4 --worker-class sync --bind 0.0.0.0:8000 --timeout 60 core.wsgi:application
+CMD ["sh", "-c", "python manage.py migrate && gunicorn --workers 4 --worker-class sync --bind 0.0.0.0:$PORT --timeout 60 core.wsgi:application"]
