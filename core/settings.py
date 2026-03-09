@@ -76,6 +76,24 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Database
 # Using PostgreSQL (Supabase or any PostgreSQL provider)
+
+# SSL MODE handling for different environments
+import ssl
+DB_SSLMODE = config('DB_SSLMODE', default='require')
+
+# Build database OPTIONS based on environment
+db_options = {
+    'sslmode': DB_SSLMODE,
+}
+
+# For Railway and cloud environments, ensure proper SSL
+if 'railway' in config('RAILWAY_ENVIRONMENT_NAME', default='').lower() or config('ENVIRONMENT', default='') == 'production':
+    db_options.update({
+        'sslmode': 'require',
+        'sslcert': None,
+        'sslrootcert': None,
+    })
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -84,9 +102,9 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
-        'OPTIONS': {
-            'sslmode': config('DB_SSLMODE', default='require'),
-        }
+        'OPTIONS': db_options,
+        'CONN_MAX_AGE': 600,
+        'ATOMIC_REQUESTS': False,
     }
 }
 
