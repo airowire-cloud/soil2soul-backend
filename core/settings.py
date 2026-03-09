@@ -84,11 +84,11 @@ DB_SSLMODE = config('DB_SSLMODE', default='require')
 # Build database OPTIONS based on environment
 db_options = {
     'sslmode': DB_SSLMODE,
-    # Force IPv4 connection (Railway IPv6 issues with Supabase)
-    'tcp_keepalives': 1,
-    'tcp_keepalives_idle': 30,
-    'tcp_keepalives_interval': 10,
-    'tcp_keepalives_count': 5,
+    # TCP keepalives for connection stability
+    'keepalives': 1,
+    'keepalives_idle': 30,
+    'keepalives_interval': 10,
+    'keepalives_count': 5,
     'connect_timeout': 30,
 }
 
