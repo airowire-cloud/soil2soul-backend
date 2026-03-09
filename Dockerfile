@@ -24,11 +24,8 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . .
 
-# Copy .env file if exists (optional - better to use environment variables at runtime)
-COPY .env* ./ 2>/dev/null || :
-
 # Export environment variables from .env file at container startup
-# Create entrypoint script
+# Create entrypoint script that loads .env if it exists
 RUN echo '#!/bin/bash\n\
 set -a\n\
 [ -f .env ] && . ./.env\n\

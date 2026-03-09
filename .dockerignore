@@ -7,7 +7,7 @@ db.sqlite3
 venv/
 env/
 venv.bak/
-.env
+# .env - Allow .env for deployment (uncomment to exclude)
 .git
 .gitignore
 *.log
