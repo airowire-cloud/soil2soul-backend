@@ -1,17 +1,42 @@
 #!/bin/bash
+set -e
 
-# Navigate to the app directory
-cd /home/site/wwwroot
+# Detect app directory
+if [ -d "/home/site/wwwroot" ]; then
+    APP_DIR="/home/site/wwwroot"
+elif [ -d "/app" ]; then
+    APP_DIR="/app"
+else
+    APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
+
+cd "$APP_DIR"
+echo "Running from: $APP_DIR"
+
+# Detect python
+if command -v python3 &>/dev/null; then
+    PYTHON=python3
+    PIP=pip3
+elif command -v python &>/dev/null; then
+    PYTHON=python
+    PIP=pip
+else
+    echo "ERROR: Python not found!"
+    exit 1
+fi
+
+echo "Using Python: $($PYTHON --version)"
 
 # Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+$PIP install --upgrade pip
+$PIP install -r requirements.txt
 
 # Collect static files
-python manage.py collectstatic --noinput 2>/dev/null || true
+$PYTHON manage.py collectstatic --noinput 2>/dev/null || true
 
 # Run migrations
-python manage.py migrate
+$PYTHON manage.py migrate --noinput
 
 # Start Gunicorn
-gunicorn --workers 4 --worker-class sync --bind 0.0.0.0:8000 core.wsgi:application
+PORT=${PORT:-8000}
+$PYTHON -m gunicorn --workers 3 --worker-class sync --bind 0.0.0.0:$PORT --timeout 120 core.wsgi:application
