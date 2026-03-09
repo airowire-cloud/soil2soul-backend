@@ -27,6 +27,15 @@ fi
 
 echo "Using Python: $($PYTHON --version)"
 
+# Create and activate virtual environment
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    $PYTHON -m venv venv
+fi
+source venv/bin/activate
+PYTHON=python
+PIP="python -m pip"
+
 # Install dependencies
 $PIP install --upgrade pip
 $PIP install -r requirements.txt
