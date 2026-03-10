@@ -14,45 +14,21 @@ from .serializers import (
 )
 
 
-def send_sms_otp(phone_number):
-    """Send OTP via MSG91 API"""
+def verify_msg91_widget_token(access_token):
+    """Verify MSG91 widget access token and get phone number"""
     import requests as http_requests
-    # MSG91 expects phone number without '+' prefix (e.g. 918050610280)
-    mobile = phone_number.lstrip('+')
-    url = 'https://control.msg91.com/api/v5/otp'
-    params = {
-        'template_id': settings.MSG91_TEMPLATE_ID,
-        'mobile': mobile,
-    }
-    headers = {
+    url = 'https://control.msg91.com/api/v5/widget/verifyAccessToken'
+    headers = {'Content-Type': 'application/json'}
+    payload = {
         'authkey': settings.MSG91_AUTH_KEY,
+        'access-token': access_token,
     }
-    response = http_requests.get(url, params=params, headers=headers, timeout=30)
+    response = http_requests.post(url, json=payload, headers=headers, timeout=30)
     data = response.json()
     if data.get('type') == 'success':
-        return True
-    print(f"MSG91 send OTP error: {data}")
-    raise Exception(data.get('message', 'Failed to send OTP via MSG91'))
-
-
-def check_otp(phone_number, code):
-    """Verify OTP via MSG91 API"""
-    import requests as http_requests
-    mobile = phone_number.lstrip('+')
-    url = 'https://control.msg91.com/api/v5/otp/verify'
-    params = {
-        'otp': code,
-        'mobile': mobile,
-    }
-    headers = {
-        'authkey': settings.MSG91_AUTH_KEY,
-    }
-    response = http_requests.get(url, params=params, headers=headers, timeout=30)
-    data = response.json()
-    if data.get('type') == 'success':
-        return True
-    print(f"MSG91 verify OTP error: {data}")
-    return False
+        return data.get('message', '')
+    print(f"MSG91 widget verify error: {data}")
+    return None
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -60,7 +36,7 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_permissions(self):
-        if self.action in ['login', 'register', 'send_otp', 'verify_otp']:
+        if self.action in ['login', 'register', 'send_otp', 'verify_otp', 'verify_otp_widget']:
             return [permissions.AllowAny()]
         return super().get_permissions()
 
@@ -139,6 +115,46 @@ class UserViewSet(viewsets.ModelViewSet):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'is_new_user': created,
+        })
+
+    @action(detail=False, methods=['post'], url_path='verify_otp_widget')
+    def verify_otp_widget(self, request):
+        """Verify MSG91 widget access token and create/login user"""
+        access_token = request.data.get('access_token', '').strip()
+        name = request.data.get('name', '').strip()
+
+        if not access_token:
+            return Response({'detail': 'Access token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify token with MSG91
+        phone_number = verify_msg91_widget_token(access_token)
+        if not phone_number:
+            return Response({'detail': 'Invalid or expired verification token'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Normalize phone number - MSG91 returns number like 919113689062
+        if not phone_number.startswith('+'):
+            phone_number = '+' + phone_number
+
+        # Get or create user by phone number
+        username = 'ph_' + phone_number.lstrip('+')
+        user, created = User.objects.get_or_create(username=username)
+        if created:
+            user.set_unusable_password()
+            name_parts = name.split(' ', 1) if name else ['']
+            user.first_name = name_parts[0]
+            user.last_name = name_parts[1] if len(name_parts) > 1 else ''
+            user.save()
+            UserProfile.objects.get_or_create(
+                user=user,
+                defaults={'phone_number': phone_number}
+            )
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'is_new_user': created,
+            'phone_number': phone_number,
         })
 
 
