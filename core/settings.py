@@ -167,6 +167,18 @@ CORS_ALLOWED_ORIGINS = config(
     default='http://localhost:3000,http://localhost:3001,http://localhost:8000,https://soilandsoulfoods.com,https://www.soilandsoulfoods.com',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Stripe configuration
 STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
