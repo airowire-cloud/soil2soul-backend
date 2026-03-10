@@ -5,14 +5,15 @@ from .models import UserProfile, Address, UserActivity
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
-        read_only_fields = ['id']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'is_staff']
+        read_only_fields = ['id', 'is_staff']
 
 
 class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
         fields = '__all__'
+        read_only_fields = ['user']
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

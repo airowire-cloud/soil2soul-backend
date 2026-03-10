@@ -98,3 +98,24 @@ class UserActivity(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.activity_type}"
+
+
+class OTPVerification(models.Model):
+    """Store OTPs for phone number verification during registration"""
+    phone_number = models.CharField(max_length=15)
+    otp = models.CharField(max_length=6)
+    name = models.CharField(max_length=100, blank=True)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'otp_verifications'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.phone_number} - {self.otp}"
+
+    def is_expired(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        return timezone.now() > self.created_at + timedelta(minutes=10)

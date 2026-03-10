@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.utils.text import slugify
 import uuid
+from decimal import Decimal
 from .models import Order, OrderItem, OrderTracking
 from .serializers import OrderSerializer, OrderTrackingSerializer
 
@@ -15,15 +16,71 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).prefetch_related('items')
     
-    def perform_create(self, serializer):
-        order = serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        """Create order with items from request data"""
+        from apps.products.models import Product
+        
+        items_data = request.data.get('items', [])
+        shipping_address_id = request.data.get('shipping_address')
+        
+        if not items_data:
+            return Response({'detail': 'No items provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate totals
+        subtotal = Decimal('0')
+        order_items = []
+        for item_data in items_data:
+            try:
+                product = Product.objects.get(id=item_data.get('product'))
+                qty = int(item_data.get('quantity', 1))
+                price = product.price
+                item_total = price * qty
+                subtotal += item_total
+                order_items.append({
+                    'product': product,
+                    'product_name': product.name,
+                    'quantity': qty,
+                    'price_per_unit': price,
+                    'total_price': item_total,
+                })
+            except Product.DoesNotExist:
+                return Response({'detail': f'Product {item_data.get("product")} not found.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        shipping_cost = Decimal('0') if subtotal > 50 else Decimal('5')
+        tax = subtotal * Decimal('0.18')
+        total_amount = subtotal + shipping_cost + tax
+        
+        # Create order
+        order = Order.objects.create(
+            user=request.user,
+            order_number=f"ORD-TEMP-{uuid.uuid4().hex[:8].upper()}",
+            shipping_address_id=shipping_address_id,
+            subtotal=subtotal,
+            shipping_cost=shipping_cost,
+            tax=tax,
+            total_amount=total_amount,
+        )
         order.order_number = self.generate_order_number(order.id)
         order.save()
+        
+        # Create order items
+        for item in order_items:
+            OrderItem.objects.create(order=order, **item)
         
         # Create tracking record
         OrderTracking.objects.create(order=order)
         
         # Send confirmation email
+        self.send_order_confirmation(order)
+        
+        serializer = self.get_serializer(order)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    def perform_create(self, serializer):
+        order = serializer.save(user=self.request.user)
+        order.order_number = self.generate_order_number(order.id)
+        order.save()
+        OrderTracking.objects.create(order=order)
         self.send_order_confirmation(order)
     
     @staticmethod

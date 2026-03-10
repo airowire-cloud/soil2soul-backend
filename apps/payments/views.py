@@ -124,7 +124,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
             
             payment.gateway_response = {
                 'razorpay_order_id': razorpay_order['id'],
-                'amount': order.total_amount,
+                'amount': str(order.total_amount),
             }
             payment.save()
             
