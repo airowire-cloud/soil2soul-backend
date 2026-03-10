@@ -15,35 +15,44 @@ from .serializers import (
 
 
 def send_sms_otp(phone_number):
-    """Send OTP via Twilio Verify API"""
-    try:
-        from twilio.rest import Client
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        verification = client.verify \
-            .v2 \
-            .services(settings.TWILIO_VERIFY_SERVICE_SID) \
-            .verifications \
-            .create(to=phone_number, channel='sms')
-        return verification.status == 'pending'
-    except Exception as e:
-        print(f"Twilio Verify send error: {e}")
-        return False
+    """Send OTP via MSG91 API"""
+    import requests as http_requests
+    # MSG91 expects phone number without '+' prefix (e.g. 918050610280)
+    mobile = phone_number.lstrip('+')
+    url = 'https://control.msg91.com/api/v5/otp'
+    params = {
+        'template_id': settings.MSG91_TEMPLATE_ID,
+        'mobile': mobile,
+    }
+    headers = {
+        'authkey': settings.MSG91_AUTH_KEY,
+    }
+    response = http_requests.get(url, params=params, headers=headers, timeout=30)
+    data = response.json()
+    if data.get('type') == 'success':
+        return True
+    print(f"MSG91 send OTP error: {data}")
+    raise Exception(data.get('message', 'Failed to send OTP via MSG91'))
 
 
 def check_otp(phone_number, code):
-    """Verify OTP via Twilio Verify API"""
-    try:
-        from twilio.rest import Client
-        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        verification_check = client.verify \
-            .v2 \
-            .services(settings.TWILIO_VERIFY_SERVICE_SID) \
-            .verification_checks \
-            .create(to=phone_number, code=code)
-        return verification_check.status == 'approved'
-    except Exception as e:
-        print(f"Twilio Verify check error: {e}")
-        return False
+    """Verify OTP via MSG91 API"""
+    import requests as http_requests
+    mobile = phone_number.lstrip('+')
+    url = 'https://control.msg91.com/api/v5/otp/verify'
+    params = {
+        'otp': code,
+        'mobile': mobile,
+    }
+    headers = {
+        'authkey': settings.MSG91_AUTH_KEY,
+    }
+    response = http_requests.get(url, params=params, headers=headers, timeout=30)
+    data = response.json()
+    if data.get('type') == 'success':
+        return True
+    print(f"MSG91 verify OTP error: {data}")
+    return False
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -57,7 +66,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def send_otp(self, request):
-        """Send OTP to phone number via Twilio Verify"""
+        """Send OTP to phone number via MSG91"""
         phone_number = request.data.get('phone_number', '').strip()
         name = request.data.get('name', '').strip()
 
@@ -75,23 +84,26 @@ class UserViewSet(viewsets.ModelViewSet):
         OTPVerification.objects.filter(phone_number=phone_number, is_verified=False).delete()
         OTPVerification.objects.create(phone_number=phone_number, otp='000000', name=name)
 
-        # Send OTP via Twilio Verify
-        sent = send_sms_otp(phone_number)
-        if not sent:
-            return Response({'detail': 'Failed to send OTP. Try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Send OTP via MSG91
+        try:
+            sent = send_sms_otp(phone_number)
+            if not sent:
+                return Response({'detail': 'Failed to send OTP. Try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({'detail': f'OTP service error: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'detail': 'OTP sent successfully'})
 
     @action(detail=False, methods=['post'])
     def verify_otp(self, request):
-        """Verify OTP via Twilio Verify and create/login user"""
+        """Verify OTP via MSG91 and create/login user"""
         phone_number = request.data.get('phone_number', '').strip()
         otp = request.data.get('otp', '').strip()
 
         if not phone_number.startswith('+'):
             phone_number = '+91' + phone_number.lstrip('0')
 
-        # Verify OTP via Twilio Verify API
+        # Verify OTP via MSG91 API
         if not check_otp(phone_number, otp):
             return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
 

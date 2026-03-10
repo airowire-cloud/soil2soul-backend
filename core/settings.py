@@ -184,10 +184,9 @@ CORS_ALLOW_HEADERS = [
 STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 
-# Twilio Verify configuration
-TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
-TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
-TWILIO_VERIFY_SERVICE_SID = config('TWILIO_VERIFY_SERVICE_SID', default='')
+# MSG91 OTP configuration
+MSG91_AUTH_KEY = config('MSG91_AUTH_KEY', default='')
+MSG91_TEMPLATE_ID = config('MSG91_TEMPLATE_ID', default='')
 
 # Razorpay configuration
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='')
