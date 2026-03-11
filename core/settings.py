@@ -184,8 +184,8 @@ CORS_ALLOW_HEADERS = [
 STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 
-# MSG91 OTP Widget configuration
-MSG91_AUTH_KEY = config('MSG91_AUTH_KEY', default='')
+# Fast2SMS OTP configuration
+FAST2SMS_API_KEY = config('FAST2SMS_API_KEY', default='')
 
 # Razorpay configuration
 RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='')

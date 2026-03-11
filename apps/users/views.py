@@ -14,21 +14,41 @@ from .serializers import (
 )
 
 
-def verify_msg91_widget_token(access_token):
-    """Verify MSG91 widget access token and get phone number"""
+def generate_otp():
+    """Generate a random 6-digit OTP"""
+    return str(random.randint(100000, 999999))
+
+
+def send_sms_otp(phone_number, otp_code):
+    """Send OTP via Fast2SMS Quick SMS API"""
     import requests as http_requests
-    url = 'https://control.msg91.com/api/v5/widget/verifyAccessToken'
-    headers = {'Content-Type': 'application/json'}
+    # Fast2SMS expects 10-digit Indian number without country code
+    mobile = phone_number.lstrip('+')
+    if mobile.startswith('91') and len(mobile) == 12:
+        mobile = mobile[2:]
+    url = 'https://www.fast2sms.com/dev/bulkV2'
     payload = {
-        'authkey': settings.MSG91_AUTH_KEY,
-        'access-token': access_token,
+        'route': 'q',
+        'message': f'Your Soil & Soul Foods OTP is {otp_code}. Valid for 5 minutes. Do not share.',
+        'flash': '0',
+        'numbers': mobile,
     }
+    headers = {
+        'authorization': settings.FAST2SMS_API_KEY,
+        'Content-Type': 'application/json',
+        'cache-control': 'no-cache',
+    }
+    print(f"[Fast2SMS] Sending OTP={otp_code} to mobile={mobile}")
     response = http_requests.post(url, json=payload, headers=headers, timeout=30)
+    print(f"[Fast2SMS] Response status={response.status_code}, body={response.text}")
     data = response.json()
-    if data.get('type') == 'success':
-        return data.get('message', '')
-    print(f"MSG91 widget verify error: {data}")
-    return None
+    if data.get('return') is True:
+        return True
+    print(f"Fast2SMS error: {data}")
+    msg = data.get('message', 'Failed to send OTP')
+    if isinstance(msg, list):
+        msg = msg[0]
+    raise Exception(msg)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -36,13 +56,13 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_permissions(self):
-        if self.action in ['login', 'register', 'send_otp', 'verify_otp', 'verify_otp_widget']:
+        if self.action in ['login', 'register', 'send_otp', 'verify_otp']:
             return [permissions.AllowAny()]
         return super().get_permissions()
 
     @action(detail=False, methods=['post'])
     def send_otp(self, request):
-        """Send OTP to phone number via MSG91"""
+        """Send OTP to phone number via Fast2SMS"""
         phone_number = request.data.get('phone_number', '').strip()
         name = request.data.get('name', '').strip()
 
@@ -56,13 +76,14 @@ class UserViewSet(viewsets.ModelViewSet):
         if not re.match(r'^\+\d{10,15}$', phone_number):
             return Response({'detail': 'Invalid phone number'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Store name for later use during verify
+        # Generate OTP and store it
+        otp_code = generate_otp()
         OTPVerification.objects.filter(phone_number=phone_number, is_verified=False).delete()
-        OTPVerification.objects.create(phone_number=phone_number, otp='000000', name=name)
+        OTPVerification.objects.create(phone_number=phone_number, otp=otp_code, name=name)
 
-        # Send OTP via MSG91
+        # Send OTP via Fast2SMS
         try:
-            sent = send_sms_otp(phone_number)
+            sent = send_sms_otp(phone_number, otp_code)
             if not sent:
                 return Response({'detail': 'Failed to send OTP. Try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
@@ -72,29 +93,30 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def verify_otp(self, request):
-        """Verify OTP via MSG91 and create/login user"""
+        """Verify OTP and create/login user"""
         phone_number = request.data.get('phone_number', '').strip()
         otp = request.data.get('otp', '').strip()
 
         if not phone_number.startswith('+'):
             phone_number = '+91' + phone_number.lstrip('0')
 
-        # Verify OTP via MSG91 API
-        if not check_otp(phone_number, otp):
-            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Get stored name from OTPVerification record
-        name = ''
+        # Verify OTP against our stored record
         try:
             otp_record = OTPVerification.objects.filter(
                 phone_number=phone_number,
                 is_verified=False
             ).latest('created_at')
-            name = otp_record.name or ''
-            otp_record.is_verified = True
-            otp_record.save()
         except OTPVerification.DoesNotExist:
-            pass
+            return Response({'detail': 'No OTP found. Please request a new OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if OTP matches
+        if otp_record.otp != otp:
+            return Response({'detail': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark as verified
+        name = otp_record.name or ''
+        otp_record.is_verified = True
+        otp_record.save()
 
         # Get or create user by phone number
         username = 'ph_' + phone_number.lstrip('+')
@@ -115,46 +137,6 @@ class UserViewSet(viewsets.ModelViewSet):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'is_new_user': created,
-        })
-
-    @action(detail=False, methods=['post'], url_path='verify_otp_widget')
-    def verify_otp_widget(self, request):
-        """Verify MSG91 widget access token and create/login user"""
-        access_token = request.data.get('access_token', '').strip()
-        name = request.data.get('name', '').strip()
-
-        if not access_token:
-            return Response({'detail': 'Access token is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Verify token with MSG91
-        phone_number = verify_msg91_widget_token(access_token)
-        if not phone_number:
-            return Response({'detail': 'Invalid or expired verification token'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Normalize phone number - MSG91 returns number like 919113689062
-        if not phone_number.startswith('+'):
-            phone_number = '+' + phone_number
-
-        # Get or create user by phone number
-        username = 'ph_' + phone_number.lstrip('+')
-        user, created = User.objects.get_or_create(username=username)
-        if created:
-            user.set_unusable_password()
-            name_parts = name.split(' ', 1) if name else ['']
-            user.first_name = name_parts[0]
-            user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-            user.save()
-            UserProfile.objects.get_or_create(
-                user=user,
-                defaults={'phone_number': phone_number}
-            )
-
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'is_new_user': created,
-            'phone_number': phone_number,
         })
 
 
